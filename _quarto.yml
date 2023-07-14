@@ -4,6 +4,7 @@ project:
 
 website:
   title: "Blog"
+  google-analytics: "G-0RS6ZW17W4"
   navbar:
     right:
       - about.qmd
