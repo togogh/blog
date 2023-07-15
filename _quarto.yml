@@ -3,7 +3,7 @@ project:
   output-dir: docs
 
 website:
-  title: "Blog"
+  title: "Togogh"
   google-analytics: "G-0RS6ZW17W4"
   navbar:
     right:
@@ -14,7 +14,7 @@ website:
         href: https://www.linkedin.com/in/ysabelcaballes/
 format:
   html:
-    theme: cyborg
+    theme: flatly
     css: styles.css
 
 

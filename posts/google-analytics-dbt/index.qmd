@@ -1,0 +1,70 @@
+---
+title: "How to transform Google Analytics 4 event data in Bigquery using DBT"
+author: "Ysabel Caballes"
+date: "2023-07-16"
+categories: [google-analytics, dbt, code, elt]
+image: "image.jpg"
+---
+
+You can make a lot of interesting reports using just Google Analytics 4. But if you want to:
+
+1. Analyze event data at a per user level,
+2. Join this data with your tables in other databases, or
+3. Store a copy of your event data outside of GA4
+
+Then it's best to set up a regular [export to Bigquery](https://support.google.com/analytics/answer/3416092).
+
+After setting this up though, you'll end up having 
+
+```{sql}
+{% set partitions_to_replace = set_partitions_window() %}
+
+{{
+  config(
+    materialized = 'incremental',
+    incremental_strategy = 'insert_overwrite',
+    partition_by={
+      "field": "event_date",
+      "data_type": "date",
+      "granularity": "day"
+    },
+    partitions = partitions_to_replace,
+    cluster_by = 'event_name'
+  )
+}}
+
+WITH events AS (
+    SELECT *
+    FROM `ga-stream-388308.analytics_255570448.events_*`
+    WHERE _TABLE_SUFFIX BETWEEN '20230101' AND FORMAT_DATE('%Y%m%d', CURRENT_DATE())
+
+    {% if is_incremental() %}
+        and PARSE_DATE('%Y%m%d', CAST(event_date AS STRING)) in ({{ partitions_to_replace | join(',') }})
+    {% endif %}
+)
+SELECT PARSE_DATE('%Y%m%d', CAST(event_date AS STRING)) AS event_date,
+    TIMESTAMP_MICROS(event_timestamp) AS event_timestamp,
+    event_name,
+    event_params,
+    event_previous_timestamp,
+    event_value_in_usd,
+    event_bundle_sequence_id,
+    event_server_timestamp_offset,
+    user_id,
+    user_pseudo_id,
+    privacy_info,
+    user_properties,
+    user_first_touch_timestamp,
+    user_ltv,
+    device,
+    geo,
+    app_info,
+    traffic_source,
+    stream_id,
+    platform,
+    event_dimensions,
+    ecommerce,
+    items,
+    collected_traffic_source
+FROM events
+```

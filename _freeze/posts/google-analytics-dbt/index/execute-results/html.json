@@ -1,0 +1,11 @@
+{
+  "hash": "0eaf0a21f3e633b677a24d024f2e0fb2",
+  "result": {
+    "markdown": "---\ntitle: \"How to transform Google Analytics 4 event data in Bigquery using DBT\"\nauthor: \"Ysabel\"\ndate: \"2023-07-16\"\ncategories: [google-analytics, dbt, code, elt]\nimage: \"image.jpg\"\n---\n\nYou can make a lot of interesting reports using just **Google Analytics 4**. But if you want to:\n\n1. Analyze event data at a per user level,\n2. Join this data with your tables in other databases, or\n3. Store a copy of your event data outside of GA4\n\nThen it's best to set up a regular [export to Bigquery](https://support.google.com/analytics/answer/3416092).\n\nAfter setting this up though, you'll end up having \n\n\n```{sql}\n{% set partitions_to_replace = set_partitions_window() %}\n\n{{\n  config(\n    materialized = 'incremental',\n    incremental_strategy = 'insert_overwrite',\n    partition_by={\n      \"field\": \"event_date\",\n      \"data_type\": \"date\",\n      \"granularity\": \"day\"\n    },\n    partitions = partitions_to_replace,\n    cluster_by = 'event_name'\n  )\n}}\n\nWITH events AS (\n    SELECT *\n    FROM `ga-stream-388308.analytics_255570448.events_*`\n    WHERE _TABLE_SUFFIX BETWEEN '20230101' AND FORMAT_DATE('%Y%m%d', CURRENT_DATE())\n\n    {% if is_incremental() %}\n        and PARSE_DATE('%Y%m%d', CAST(event_date AS STRING)) in ({{ partitions_to_replace | join(',') }})\n    {% endif %}\n)\nSELECT PARSE_DATE('%Y%m%d', CAST(event_date AS STRING)) AS event_date,\n    TIMESTAMP_MICROS(event_timestamp) AS event_timestamp,\n    event_name,\n    event_params,\n    event_previous_timestamp,\n    event_value_in_usd,\n    event_bundle_sequence_id,\n    event_server_timestamp_offset,\n    user_id,\n    user_pseudo_id,\n    privacy_info,\n    user_properties,\n    user_first_touch_timestamp,\n    user_ltv,\n    device,\n    geo,\n    app_info,\n    traffic_source,\n    stream_id,\n    platform,\n    event_dimensions,\n    ecommerce,\n    items,\n    collected_traffic_source\nFROM events\n```\n\n",
+    "supporting": [
+      "index_files"
+    ],
+    "filters": [],
+    "includes": {}
+  }
+}

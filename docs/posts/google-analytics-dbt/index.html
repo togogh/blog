@@ -6,10 +6,10 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="author" content="Harlow Malloc">
-<meta name="dcterms.date" content="2023-07-13">
+<meta name="author" content="Ysabel">
+<meta name="dcterms.date" content="2023-07-16">
 
-<title>Togogh - Post With Code</title>
+<title>Togogh - How to transform Google Analytics 4 event data in Bigquery using DBT</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -21,40 +21,6 @@ ul.task-list li input[type="checkbox"] {
   width: 0.8em;
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
-}
-/* CSS for syntax highlighting */
-pre > code.sourceCode { white-space: pre; position: relative; }
-pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
-pre > code.sourceCode > span:empty { height: 1.2em; }
-.sourceCode { overflow: visible; }
-code.sourceCode > span { color: inherit; text-decoration: inherit; }
-div.sourceCode { margin: 1em 0; }
-pre.sourceCode { margin: 0; }
-@media screen {
-div.sourceCode { overflow: auto; }
-}
-@media print {
-pre > code.sourceCode { white-space: pre-wrap; }
-pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
-}
-pre.numberSource code
-  { counter-reset: source-line 0; }
-pre.numberSource code > span
-  { position: relative; left: -4em; counter-increment: source-line; }
-pre.numberSource code > span > a:first-child::before
-  { content: counter(source-line);
-    position: relative; left: -1em; text-align: right; vertical-align: baseline;
-    border: none; display: inline-block;
-    -webkit-touch-callout: none; -webkit-user-select: none;
-    -khtml-user-select: none; -moz-user-select: none;
-    -ms-user-select: none; user-select: none;
-    padding: 0 4px; width: 4em;
-  }
-pre.numberSource { margin-left: 3em;  padding-left: 4px; }
-div.sourceCode
-  {   }
-@media screen {
-pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
 }
 </style>
 
@@ -151,11 +117,12 @@ gtag('config', 'G-0RS6ZW17W4', { 'anonymize_ip': true});
 <header id="title-block-header" class="quarto-title-block default page-columns page-full">
   <div class="quarto-title-banner page-columns page-full">
     <div class="quarto-title column-body">
-      <h1 class="title">Post With Code</h1>
+      <h1 class="title">How to transform Google Analytics 4 event data in Bigquery using DBT</h1>
                                 <div class="quarto-categories">
-                <div class="quarto-category">news</div>
+                <div class="quarto-category">google-analytics</div>
+                <div class="quarto-category">dbt</div>
                 <div class="quarto-category">code</div>
-                <div class="quarto-category">analysis</div>
+                <div class="quarto-category">elt</div>
               </div>
                   </div>
   </div>
@@ -166,14 +133,14 @@ gtag('config', 'G-0RS6ZW17W4', { 'anonymize_ip': true});
       <div>
       <div class="quarto-title-meta-heading">Author</div>
       <div class="quarto-title-meta-contents">
-               <p>Harlow Malloc </p>
+               <p>Ysabel </p>
             </div>
     </div>
       
       <div>
       <div class="quarto-title-meta-heading">Published</div>
       <div class="quarto-title-meta-contents">
-        <p class="date">July 13, 2023</p>
+        <p class="date">July 16, 2023</p>
       </div>
     </div>
     
@@ -191,13 +158,64 @@ gtag('config', 'G-0RS6ZW17W4', { 'anonymize_ip': true});
 
 
 
-<p>This is a post with executable code.</p>
-<div class="cell" data-execution_count="1">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">'Hello World!'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>Hello World!</code></pre>
-</div>
-</div>
+<p>You can make a lot of interesting reports using just <strong>Google Analytics 4</strong>. But if you want to:</p>
+<ol type="1">
+<li>Analyze event data at a per user level,</li>
+<li>Join this data with your tables in other databases, or</li>
+<li>Store a copy of your event data outside of GA4</li>
+</ol>
+<p>Then it’s best to set up a regular <a href="https://support.google.com/analytics/answer/3416092">export to Bigquery</a>.</p>
+<p>After setting this up though, you’ll end up having</p>
+<pre class="{sql}"><code>{% set partitions_to_replace = set_partitions_window() %}
+
+{{
+  config(
+    materialized = 'incremental',
+    incremental_strategy = 'insert_overwrite',
+    partition_by={
+      "field": "event_date",
+      "data_type": "date",
+      "granularity": "day"
+    },
+    partitions = partitions_to_replace,
+    cluster_by = 'event_name'
+  )
+}}
+
+WITH events AS (
+    SELECT *
+    FROM `ga-stream-388308.analytics_255570448.events_*`
+    WHERE _TABLE_SUFFIX BETWEEN '20230101' AND FORMAT_DATE('%Y%m%d', CURRENT_DATE())
+
+    {% if is_incremental() %}
+        and PARSE_DATE('%Y%m%d', CAST(event_date AS STRING)) in ({{ partitions_to_replace | join(',') }})
+    {% endif %}
+)
+SELECT PARSE_DATE('%Y%m%d', CAST(event_date AS STRING)) AS event_date,
+    TIMESTAMP_MICROS(event_timestamp) AS event_timestamp,
+    event_name,
+    event_params,
+    event_previous_timestamp,
+    event_value_in_usd,
+    event_bundle_sequence_id,
+    event_server_timestamp_offset,
+    user_id,
+    user_pseudo_id,
+    privacy_info,
+    user_properties,
+    user_first_touch_timestamp,
+    user_ltv,
+    device,
+    geo,
+    app_info,
+    traffic_source,
+    stream_id,
+    platform,
+    event_dimensions,
+    ecommerce,
+    items,
+    collected_traffic_source
+FROM events</code></pre>
 
 
 
